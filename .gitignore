@@ -1,0 +1,4 @@
+cwd.txt
+node_modules
+coverage
+.nyc_output
