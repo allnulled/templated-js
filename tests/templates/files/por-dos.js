@@ -1,0 +1,1 @@
+Esto es <$=input*2$>

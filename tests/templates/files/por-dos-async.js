@@ -1,0 +1,1 @@
+Esto es <$=await new Promise(ok => setTimeout(() => ok(input*2)))$>

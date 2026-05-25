@@ -24,12 +24,12 @@ class TjsRender {
   static createRendererSource(template, options = {}) {
     const {
       delimiter = "$",
-      name = false,
-      async: isAsync = false,
+      // name = false,
+      // async: isAsync = false,
       beautifyRender = false,
     } = options;
     const openBlock = `<${delimiter}`;
-    const openBlockComment = "/*" + openBlock;
+    const openBlockComment = `/*${openBlock}`;
     const openValue = `<${delimiter}=`;
     const openValueComment = `/*${openValue}`;
     const close = `${delimiter}>`;
@@ -111,11 +111,7 @@ class TjsRender {
   }
   static createRenderer(template, options, argKeys = ["data"]) {
     const renderedSource = this.createRendererSource(template, options, argKeys);
-    if (options.async) {
-      return new TjsRender.AsyncFunction(...argKeys, renderedSource);
-    } else {
-      return new Function(...argKeys, renderedSource);
-    }
+    return options.async ? new TjsRender.AsyncFunction(...argKeys, renderedSource) : new Function(...argKeys, renderedSource);
   }
 }
 class TjsReader {
@@ -159,9 +155,9 @@ class Tjs {
     this.render = TjsRender.render;
     this.renderUrl = TjsReader.renderUrl;
     this.renderFile = TjsReader.renderFile;
+    this.renderFileSync = TjsReader.renderFileSync;
     this.createRenderer = TjsRender.createRenderer;
     this.createRendererSource = TjsRender.createRendererSource;
-    this.renderFileSync = TjsReader.renderFileSync;
   }
   static create(...args) {
     return new this(...args);
@@ -176,10 +172,10 @@ class Tjs {
     }
     return require("path").resolve(this.basedir, file);
   }
-  renderFileSync(file, args, options) {
+  renderFileSync(file, args, options = {}) {
     return this.constructor.renderFileSync(this.fullpathOf(file), this.generateParameters(args, file, options), options);
   }
-  renderFile(file, args, options) {
+  renderFile(file, args, options = {}) {
     return this.constructor.renderFile(this.fullpathOf(file), this.generateParameters(args, file, options), { ...options, async: true });
   }
   generateParameters(args, file, options) {
