@@ -212,7 +212,7 @@ class Tjs {
     return {
         ...args,
         tjs: this,
-        __dirname: fullfilepath,
+        __dirname: fulldirpath,
         __filename: fullfilepath,
         stringifyFile: (targetFile) => {
           return this.readFileAsString(this.fullpathOf(targetFile, fulldirpath));
