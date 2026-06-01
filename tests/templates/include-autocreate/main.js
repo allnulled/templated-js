@@ -1,0 +1,1 @@
+/*<$=await include("./ejemplo.js")$>*/

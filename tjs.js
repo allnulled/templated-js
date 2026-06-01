@@ -172,8 +172,13 @@ class Tjs {
   static create(...args) {
     return new this(...args);
   }
-  constructor(basedir) {
+  static defaultSettings = {
+    createFileIfNotExists: false,
+    defaultFileContent: "",
+  };
+  constructor(basedir, settings = {}) {
     this.basedir = basedir;
+    this.settings = Object.assign({}, this.constructor.defaultSettings, settings);
   }
   fullpathOf(file, relativeDir = false) {
     this.constructor.assert(typeof file === "string", "required file as string on Tjs.prototype.fullpathOf");
@@ -227,10 +232,31 @@ class Tjs {
           return this.readFileSync(this.fullpathOf(targetFile, fulldirpath));
         },
         includeSync: (targetFile, ...others) => {
-          return this.renderFileSync(this.fullpathOf(targetFile, fulldirpath), ...others);
+          if(this.settings.createFileIfNotExists) {
+            try {
+              return this.renderFileSync(this.fullpathOf(targetFile, fulldirpath), ...others);
+            } catch (error) {
+              if(error.code === "ENOENT") {
+                require("fs").writeFileSync(this.fullpathOf(targetFile, fulldirpath), this.settings.defaultFileContent, "utf-8");
+                return this.renderFileSync(this.fullpathOf(targetFile, fulldirpath), ...others);
+              }
+              throw error;
+            }
+          } else {
+            return this.renderFileSync(this.fullpathOf(targetFile, fulldirpath), ...others);
+          }
         },
         include: (targetFile, ...others) => {
-          return this.renderFile(this.fullpathOf(targetFile, fulldirpath), ...others);
+          return this.renderFile(this.fullpathOf(targetFile, fulldirpath), ...others).catch(error => {
+            if(this.settings.createFileIfNotExists) {
+              if(error.code === "ENOENT") {
+                return require("fs").promises.writeFile(this.fullpathOf(targetFile, fulldirpath), this.settings.defaultFileContent, "utf-8").then(() => {
+                  return this.renderFile(this.fullpathOf(targetFile, fulldirpath), ...others);
+                });
+              }
+            }
+            throw error;
+          });
         },
     };
   }
