@@ -16,6 +16,7 @@ pwd > cwd.txt
     -i "**/.nyc_output/**/*" \
     -i "**/dist-instrumented/**/*" \
     -d 0 \
+    -p 3005 \
     -e "sh" \
     -e "ts" \
     -e "tsx" \

@@ -1,0 +1,1 @@
+static source = /*<$=await pasteFile("./ejemplo-html-3.html")$>*/;

@@ -1,0 +1,1 @@
+static source = /*<$=await tjs.readFileAsString("templates/files/ejemplo-html.html")$>*/;

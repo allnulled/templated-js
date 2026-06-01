@@ -1,0 +1,1 @@
+static source = /*<$=await stringifyFile("./ejemplo-html.html")$>*/;

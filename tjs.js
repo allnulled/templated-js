@@ -119,8 +119,14 @@ class TjsReader {
   static readFile(file) {
     return require("fs").promises.readFile(file, "utf8");
   }
+  static readFileAsString(file) {
+    return require("fs").promises.readFile(file, "utf8").then(source => JSON.stringify(source));
+  }
   static readFileSync(file) {
     return require("fs").readFileSync(file, "utf8");
+  }
+  static readFileSyncAsString(file) {
+    return JSON.stringify(require("fs").readFileSync(file, "utf8"));
   }
   static readUrl(url) {
     return fetch(url, { method: "GET" }).then(response => response.text());
@@ -156,6 +162,10 @@ class Tjs {
     this.renderUrl = TjsReader.renderUrl;
     this.renderFile = TjsReader.renderFile;
     this.renderFileSync = TjsReader.renderFileSync;
+    this.readFile = TjsReader.readFile;
+    this.readFileAsString = TjsReader.readFileAsString;
+    this.readFileSync = TjsReader.readFileSync;
+    this.readFileSyncAsString = TjsReader.readFileSyncAsString;
     this.createRenderer = TjsRender.createRenderer;
     this.createRendererSource = TjsRender.createRendererSource;
   }
@@ -172,22 +182,53 @@ class Tjs {
     }
     return require("path").resolve(this.basedir, file);
   }
+  directoryOf(file) {
+    return require("path").dirname(this.fullpathOf(file));
+  }
   renderFileSync(file, args, options = {}) {
     return this.constructor.renderFileSync(this.fullpathOf(file), this.generateParameters(args, file, options), options);
   }
   renderFile(file, args, options = {}) {
     return this.constructor.renderFile(this.fullpathOf(file), this.generateParameters(args, file, options), { ...options, async: true });
   }
+  readFileSync(file) {
+    return this.constructor.readFileSync(this.fullpathOf(file));
+  }
+  readFile(file) {
+    return this.constructor.readFile(this.fullpathOf(file));
+  }
+  readFileAsString(file) {
+    return this.constructor.readFileAsString(this.fullpathOf(file));
+  }
+  readFileSyncAsString(file) {
+    return this.constructor.readFileSyncAsString(this.fullpathOf(file));
+  }
+  readFileAsString(file) {
+    return this.constructor.readFileAsString(this.fullpathOf(file));
+  }
   generateParameters(args, file, options) {
+    const fullfilepath = this.fullpathOf(file);
     return {
         ...args,
         tjs: this,
-        __filename: this.fullpathOf(file),
+        __filename: fullfilepath,
+        stringifyFile: (targetFile) => {
+          return this.readFileAsString(this.fullpathOf(targetFile, require("path").dirname(fullfilepath)));
+        },
+        stringifyFileSync: (targetFile) => {
+          return this.readFileSyncAsString(this.fullpathOf(targetFile, require("path").dirname(fullfilepath)));
+        },
+        pasteFile: (targetFile) => {
+          return this.readFile(this.fullpathOf(targetFile, require("path").dirname(fullfilepath)));
+        },
+        pasteFileSync: (targetFile) => {
+          return this.readFileSync(this.fullpathOf(targetFile, require("path").dirname(fullfilepath)));
+        },
         includeSync: (targetFile, ...others) => {
-          return this.renderFileSync(this.fullpathOf(targetFile, require("path").dirname(file)), ...others);
+          return this.renderFileSync(this.fullpathOf(targetFile, require("path").dirname(fullfilepath)), ...others);
         },
         include: (targetFile, ...others) => {
-          return this.renderFile(this.fullpathOf(targetFile, require("path").dirname(file)), ...others);
+          return this.renderFile(this.fullpathOf(targetFile, require("path").dirname(fullfilepath)), ...others);
         },
     };
   }
