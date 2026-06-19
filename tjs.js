@@ -6,7 +6,7 @@ class TjsRender {
   static render(template, injection = {}, options = {}) {
     const args = { ...injection, Tjs };
     const renderer = this.createRenderer(template, options, Object.keys(args))
-    if(options.async) {
+    if (options.async) {
       return renderer(...Object.values(args)).then(newSource => {
         if (options.beautify) {
           newSource = TjsRender.beautifyJs(newSource, options.beautify);
@@ -20,6 +20,49 @@ class TjsRender {
       }
       return newSource;
     }
+  }
+  static findMatchingParenthesys(source, startPos) {
+    let depth = 1;
+    let pos = startPos;
+    let quote = null;
+    let escaped = false;
+    while (pos < source.length) {
+      const ch = source[pos];
+      // Dentro de string
+      if (quote) {
+        if (escaped) {
+          escaped = false;
+        } else if (ch === "\\") {
+          escaped = true;
+        } else if (ch === quote) {
+          quote = null;
+        }
+        pos++;
+        continue;
+      }
+      // Entrando en string
+      if (
+        ch === '"' ||
+        ch === "'" ||
+        ch === "`"
+      ) {
+        quote = ch;
+        pos++;
+        continue;
+      }
+      // Balanceo
+      if (ch === "(") {
+        depth++;
+      } else if (ch === ")") {
+        depth--;
+
+        if (depth === 0) {
+          return pos;
+        }
+      }
+      pos++;
+    }
+    return -1;
   }
   static createRendererSource(template, options = {}) {
     const {
@@ -38,7 +81,18 @@ class TjsRender {
     let pos = 0;
     Iterating_characters:
     do {
-      if (template.startsWith(openBlockComment, pos)) {
+       if (template.startsWith("$injection(", pos)) {
+        // @CHATGPT: HELP!
+        const startCall = pos + "$injection(".length;
+        const endCall = this.findMatchingParenthesys(template, startCall);
+        if (endCall === -1) {
+          throw new Error(`unclosed injection call: [pos=${pos}] ${template.substr(pos, 20)}`);
+        }
+        const callContent = template.substring(startCall, endCall);
+        code += `$templatedJs += (await include(${callContent.trim()}));\n`;
+        pos = endCall + 1;
+        continue Iterating_characters;
+      } else if (template.startsWith(openBlockComment, pos)) {
         const isValue = template.startsWith(openValueComment, pos);
         const offset = isValue ? openValueComment.length : openBlockComment.length;
         pos += offset;
@@ -84,10 +138,28 @@ class TjsRender {
         }
         throw new Error(`unclosed injected ${isValue ? "value" : "expression"}: [pos=${startedAt}] ${template.substr(startedAt, 20)}`);
       } else {
+        ///////////////////////////////////////
+        // 
+        // @IMPORTANTE: PARA EL PARSER SER RÁPIDO
+        // SE BUSCAN DIRECTAMENTE LAS APERTURAS
+        // Y SE MUEVE EL CURSOR AHÍ
+        // Y SE DEJA A UNA NUEVA ITERACIÓN ENCARGARSE
+        // DE CADA CASO
+        // 
+        // @IMPORTANTE: POR ESO NO BASTA CON INYECTAR UNA SINTAXIS
+        // TAMBIÉN HAY QUE INDICAR AQUÍ CUAL ES SU CONDICIÓN
+        // PARA QUE EL AVANCE SEA DIRECTO, EXPRESO, AL SIGUIENTE CAMBIO
+        // 
+        ///////////////////////////////////////
         const startedAt = pos;
         Injecting_string: {
           while (pos < template.length) {
-            if (template.startsWith(openBlockComment, pos) || template.startsWith(openBlock, pos)) {
+            // @IMPORTANTE: aquí es la condición de nueva iteración
+            if (
+              template.startsWith(openBlockComment, pos)
+              || template.startsWith(openBlock, pos) 
+              || template.startsWith("$injection(", pos)
+            ) {
               const endedAt = pos;
               const interjection = template.substring(startedAt, endedAt);
               const subcode = `$templatedJs += ${JSON.stringify(interjection)};\n`;
@@ -182,7 +254,7 @@ class Tjs {
   }
   fullpathOf(file, relativeDir = false) {
     this.constructor.assert(typeof file === "string", "required file as string on Tjs.prototype.fullpathOf");
-    if(file.startsWith("./")) {
+    if (file.startsWith("./")) {
       return require("path").resolve(relativeDir, file);
     }
     return require("path").resolve(this.basedir, file);
@@ -215,49 +287,61 @@ class Tjs {
     const fullfilepath = this.fullpathOf(file);
     const fulldirpath = require("path").dirname(fullfilepath);
     return {
-        ...args,
-        tjs: this,
-        __dirname: fulldirpath,
-        __filename: fullfilepath,
-        stringifyFile: (targetFile) => {
-          return this.readFileAsString(this.fullpathOf(targetFile, fulldirpath));
-        },
-        stringifyFileSync: (targetFile) => {
-          return this.readFileSyncAsString(this.fullpathOf(targetFile, fulldirpath));
-        },
-        pasteFile: (targetFile) => {
-          return this.readFile(this.fullpathOf(targetFile, fulldirpath));
-        },
-        pasteFileSync: (targetFile) => {
-          return this.readFileSync(this.fullpathOf(targetFile, fulldirpath));
-        },
-        includeSync: (targetFile, ...others) => {
-          if(this.settings.createFileIfNotExists) {
-            try {
-              return this.renderFileSync(this.fullpathOf(targetFile, fulldirpath), ...others);
-            } catch (error) {
-              if(error.code === "ENOENT") {
-                require("fs").writeFileSync(this.fullpathOf(targetFile, fulldirpath), this.settings.defaultFileContent, "utf-8");
-                return this.renderFileSync(this.fullpathOf(targetFile, fulldirpath), ...others);
-              }
-              throw error;
-            }
-          } else {
-            return this.renderFileSync(this.fullpathOf(targetFile, fulldirpath), ...others);
-          }
-        },
-        include: (targetFile, ...others) => {
-          return this.renderFile(this.fullpathOf(targetFile, fulldirpath), ...others).catch(error => {
-            if(this.settings.createFileIfNotExists) {
-              if(error.code === "ENOENT") {
-                return require("fs").promises.writeFile(this.fullpathOf(targetFile, fulldirpath), this.settings.defaultFileContent, "utf-8").then(() => {
-                  return this.renderFile(this.fullpathOf(targetFile, fulldirpath), ...others);
-                });
-              }
+      ...args,
+      tjs: this,
+      require,
+      process,
+      __dirname: fulldirpath,
+      __filename: fullfilepath,
+      stringifyFile: (targetFile) => {
+        return this.readFileAsString(this.fullpathOf(targetFile, fulldirpath));
+      },
+      stringifyFileSync: (targetFile) => {
+        return this.readFileSyncAsString(this.fullpathOf(targetFile, fulldirpath));
+      },
+      pasteFile: (targetFile) => {
+        return this.readFile(this.fullpathOf(targetFile, fulldirpath));
+      },
+      pasteFileSync: (targetFile) => {
+        return this.readFileSync(this.fullpathOf(targetFile, fulldirpath));
+      },
+      includeSync: (targetFile, ...others) => {
+        const fullpathFile = this.fullpathOf(targetFile, fulldirpath);
+        if (this.settings.createFileIfNotExists) {
+          try {
+            return this.renderFileSync(fullpathFile, ...others);
+          } catch (error) {
+            if (error.code === "ENOENT" && error.message.includes(fullpathFile + "'")) {
+              require("fs").writeFileSync(fullpathFile, this.settings.defaultFileContent, "utf-8");
+              return this.renderFileSync(fullpathFile, ...others);
             }
             throw error;
-          });
-        },
+          }
+        } else {
+          return this.renderFileSync(fullpathFile, ...others);
+        }
+      },
+      include: (targetFile, ...others) => {
+        const fullpathFile = this.fullpathOf(targetFile, fulldirpath);
+        return this.renderFile(fullpathFile, ...others).catch(error => {
+          if (this.settings.createFileIfNotExists) {
+            Debugging: {
+              break Debugging;
+              console.log("Message:", error.message);
+              console.log("error:", error);
+              console.log("code:", error.code);
+              console.log("props:", Object.keys(error));
+            }
+            if (error.code === "ENOENT" && error.message.includes(fullpathFile + "'")) {
+              console.log("[!] Creating file as it does not exist and it was called by «include» with «defaultFileContent»:\n -", fullpathFile);
+              return require("fs").promises.writeFile(fullpathFile, this.settings.defaultFileContent, "utf-8").then(() => {
+                return this.renderFile(fullpathFile, ...others);
+              });
+            }
+          }
+          throw error;
+        });
+      },
     };
   }
 }

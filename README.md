@@ -18,7 +18,7 @@ const Tjs = require("./tjs.js");
 Tjs.create(__dirname, {
   createFileIfNotExists: false, // en true, el include intenta crear el fichero si no lo encuentra
   defaultFileContent: "", // cuando incurre createFileIfNotExists, el contenido al crear el fichero es este
-})
+});
 ```
 
 ### Contra textos
